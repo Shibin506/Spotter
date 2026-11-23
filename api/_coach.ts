@@ -86,7 +86,8 @@ export async function coach(bodyText: string, env: CoachEnv): Promise<Result> {
   if (!v.ok) return { status: 400, body: { error: v.error ?? 'invalid set data' } };
 
   const f = env.fetch ?? fetch;
-  const p = PROVIDERS[env.provider ?? 'gemini'];
+  const provider = env.provider ?? 'gemini';
+  const p = PROVIDERS[provider];
   const call = (model: string) =>
     f(p.endpoint, {
       method: 'POST',
@@ -94,22 +95,35 @@ export async function coach(bodyText: string, env: CoachEnv): Promise<Result> {
       body: JSON.stringify({
         model,
         messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: JSON.stringify(v.data) }],
-        max_tokens: env.provider === 'groq' ? 400 : 1500,
-        // Gemini's thinking would otherwise use up the token budget.
-        ...(env.provider === 'groq' ? {} : { reasoning_effort: 'low' }),
+        // Room for reasoning models to think before the three lines; and ask them to keep it short.
+        max_tokens: 1500,
+        ...(provider === 'gemini' || /gpt-oss|qwen3|deepseek-r1/.test(model) ? { reasoning_effort: 'low' } : {}),
         temperature: 0.4,
       }),
     });
-  let res = await call(env.model ?? p.model);
+  let model = env.model ?? workingModel.get(provider) ?? p.model;
+  let res = await call(model);
   if (!res.ok && (res.status === 400 || res.status === 404) && !env.model && p.models) {
     const other = await pickModel(f, p.models, env.apiKey);
-    if (other) res = await call(other);
+    if (other) {
+      model = other;
+      res = await call(model);
+    }
   }
+  if (res.ok) workingModel.set(provider, model);
+  let note = res.ok ? await noteOf(res) : null;
+  if (res.ok && !note) note = await call(model).then((r) => (r.ok ? noteOf(r) : null)); // one retry on an empty reply
   if (!res.ok) return { status: 502, body: { error: `model error ${res.status}` } };
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const note = data.choices?.[0]?.message?.content?.trim();
   if (!note) return { status: 502, body: { error: 'empty reply' } };
   return { status: 200, body: { note: note.replace(/[*#`]/g, '').slice(0, 1200) } };
+}
+
+/** The model that last worked per provider, so a retired default isn't retried on every request. */
+const workingModel = new Map<ProviderName, string>();
+
+async function noteOf(res: Response): Promise<string | null> {
+  const data = (await res.json()) as { choices?: { message?: { content?: string | null } }[] };
+  return data.choices?.[0]?.message?.content?.trim() || null;
 }
 
 /** A small per-instance limit, so a public endpoint can't burn through the key. */

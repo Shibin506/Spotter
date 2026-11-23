@@ -69,3 +69,29 @@ describe('depth wording for the model', () => {
     expect(depthText(null)).toBeNull();
   });
 });
+
+describe('AI coach reliability', () => {
+  it('retries once when the model returns an empty reply, and asks reasoning models to think briefly', async () => {
+    const bodies: { model: string; reasoning_effort?: string; max_tokens: number }[] = [];
+    let n = 0;
+    const fake = (async (_url: string, init?: { body?: string }) => {
+      bodies.push(JSON.parse(init!.body!));
+      n++;
+      return new Response(JSON.stringify({ choices: [{ message: { content: n === 1 ? '' : 'Solid set.' } }] }));
+    }) as never;
+    const r = await coach(JSON.stringify(set), { apiKey: 'k', provider: 'groq', model: 'openai/gpt-oss-120b', fetch: fake });
+    expect(r).toMatchObject({ status: 200, body: { note: 'Solid set.' } });
+    expect(bodies).toHaveLength(2);
+    expect(bodies[0]).toMatchObject({ reasoning_effort: 'low', max_tokens: 1500 });
+  });
+
+  it('does not send reasoning_effort to non-reasoning Groq models', async () => {
+    let body: Record<string, unknown> = {};
+    const fake = (async (_u: string, init?: { body?: string }) => {
+      body = JSON.parse(init!.body!);
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'ok' } }] }));
+    }) as never;
+    await coach(JSON.stringify(set), { apiKey: 'k', provider: 'groq', model: 'llama-3.3-70b-versatile', fetch: fake });
+    expect(body.reasoning_effort).toBeUndefined();
+  });
+});

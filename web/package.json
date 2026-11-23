@@ -9,7 +9,7 @@
     "dev": "vite",
     "prebuild": "npm run assets",
     "build": "tsc -b && vite build",
-    "build:embed": "npm run assets && tsc -b && vite build --mode embed --outDir dist-embed && rm -f dist-embed/mediapipe/vision_wasm_module_internal.*",
+    "build:embed": "npm run assets && tsc -b && vite build --mode embed --outDir dist-embed && rm -f dist-embed/mediapipe/vision_wasm_module_internal.* && node scripts/embed-models.mjs dist-embed/models",
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test --trace off"

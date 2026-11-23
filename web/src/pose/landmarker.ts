@@ -30,7 +30,7 @@ async function create(kind: ModelKind): Promise<Landmarker> {
   for (const delegate of (forceCpu ? ['CPU'] : ['GPU', 'CPU']) as ('GPU' | 'CPU')[]) {
     try {
       const lm = await PoseLandmarker.createFromOptions(files, {
-        baseOptions: { modelAssetPath: `${base}models/pose_landmarker_${kind}.task`, delegate },
+        baseOptions: { ...(await modelSource(kind, base)), delegate },
         runningMode: 'VIDEO',
         numPoses: 1,
         minPoseDetectionConfidence: 0.5,
@@ -43,6 +43,17 @@ async function create(kind: ModelKind): Promise<Landmarker> {
     }
   }
   throw lastError;
+}
+
+/** The model file, or (in the embed build, for hosts that can't serve .task files) its bytes from base64 text. */
+async function modelSource(kind: ModelKind, base: string): Promise<{ modelAssetPath: string } | { modelAssetBuffer: Uint8Array }> {
+  if (import.meta.env.MODE !== 'embed') return { modelAssetPath: `${base}models/pose_landmarker_${kind}.task` };
+  const res = await fetch(`${base}models/pose_landmarker_${kind}.b64.txt`);
+  if (!res.ok) throw new Error(`model download failed: HTTP ${res.status}`);
+  const bin = atob(await res.text());
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return { modelAssetBuffer: bytes };
 }
 
 export function toFrame(result: PoseLandmarkerResult, tMs: number, aspect: number): PoseFrame {

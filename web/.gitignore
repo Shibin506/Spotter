@@ -1,0 +1,9 @@
+node_modules
+dist
+public/mediapipe
+public/models
+e2e/fixtures/*.mjpeg
+test-results
+playwright-report
+*.local
+*.tsbuildinfo

@@ -60,3 +60,12 @@ describe('AI coach providers', () => {
     expect(calls).toEqual(['chat:llama-3.3-70b-versatile', 'list:https://api.groq.com/openai/v1/models', 'chat:openai/gpt-oss-120b']);
   });
 });
+
+describe('depth wording for the model', () => {
+  it('says above / below parallel in words', async () => {
+    const { depthText } = await import('../../api/_coach');
+    expect(depthText(3)).toBe('3 cm below parallel');
+    expect(depthText(-6.4)).toBe('6 cm above parallel (too shallow)');
+    expect(depthText(null)).toBeNull();
+  });
+});

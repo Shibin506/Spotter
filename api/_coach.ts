@@ -11,8 +11,8 @@ export const PROVIDERS = {
 export type ProviderName = keyof typeof PROVIDERS;
 
 export const SYSTEM = `You are a concise, encouraging strength coach. You get the numbers from one set tracked by a phone camera:
-per-rep timing, joint angles, hipBelowKneeCm (positive = hip that far below the knee, i.e. deep enough;
-negative = hip that far ABOVE parallel, i.e. too shallow), bar speed in m/s, speed loss (0..1), and form flags.
+per-rep timing, joint angles, depth (how far the hip got below or above parallel), bar speed in m/s,
+speed loss (0..1), and form flags.
 Reply with exactly three short lines, no headings, no markdown:
 1) what went well, citing a number; 2) the one thing to fix first, citing the rep(s); 3) a concrete cue or plan for the next set.
 Do not diagnose injuries or give medical advice. Do not invent numbers that are not in the data.`;
@@ -46,6 +46,12 @@ async function pickModel(f: typeof fetch, url: string, apiKey: string): Promise<
 
 type Result = { status: number; body: { note?: string; error?: string } };
 
+/** "3 cm below parallel" / "6 cm above parallel (too shallow)": words, so the model can't flip the sign. */
+export function depthText(cm: number | null): string | null {
+  if (cm === null) return null;
+  return cm >= 0 ? `${Math.round(cm)} cm below parallel` : `${Math.round(-cm)} cm above parallel (too shallow)`;
+}
+
 /** Checks the payload is a plausible set summary and strips it to known fields. */
 export function validate(raw: unknown): { ok: boolean; data?: unknown; error?: string } {
   if (!raw || typeof raw !== 'object') return { ok: false, error: 'expected a JSON object' };
@@ -57,7 +63,7 @@ export function validate(raw: unknown): { ok: boolean; data?: unknown; error?: s
   const clean = reps.map((x) => {
     const o = (x ?? {}) as Record<string, unknown>;
     return {
-      index: num(o.index), downSec: num(o.downSec), upSec: num(o.upSec), minAngle: num(o.minAngle), hipBelowKneeCm: num(o.hipBelowKneeCm),
+      index: num(o.index), downSec: num(o.downSec), upSec: num(o.upSec), minAngle: num(o.minAngle), depth: depthText(num(o.hipBelowKneeCm)),
       velocity: num(o.velocity), velocityLoss: num(o.velocityLoss), maxLean: num(o.maxLean),
       faults: Array.isArray(o.faults) ? o.faults.filter((f) => typeof f === 'string').slice(0, 8) : [],
     };

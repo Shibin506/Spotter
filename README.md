@@ -48,6 +48,7 @@ camera frame ─► MediaPipe Pose Landmarker (GPU, WASM) ─► One Euro smooth
 - **Rep counting:** a state machine with hysteresis on each exercise's main angle. The press is counted from the bottom (180° − elbow), and small dips and bounces don't count as reps.
 - **Bar speed:** vertical travel of the tracked point (bar, hips or shoulders) over the lifting half of each rep. Pixels are turned into metres from your height and measured leg length (thigh + shin ≈ 49% of height). Reps left = a straight-line fit of the last reps' speeds, extended down to the slowest speed a rep usually succeeds at (e.g. 0.3 m/s for squats).
 - **1-rep max:** a load–velocity line through your sets at different bar weights, read off at that slowest speed.
+- **Uploaded videos** are analyzed frame by frame (seek, then analyze), so no rep is skipped however slow the phone; the overlay plays along as it goes.
 - **Highlight clip:** the set is recorded on-device (canvas + MediaRecorder). The clip plays the recording once from start to end, slowing down for the chosen rep and freezing at its bottom. It never seeks, because browser-made WebM files often can't seek reliably.
 - **AI coach:** `api/coach.ts` is a Vercel Function. It validates the payload, keeps only known numeric fields, rate-limits each caller, and asks Gemini for three short lines.
 

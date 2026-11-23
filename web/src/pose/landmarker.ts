@@ -22,6 +22,11 @@ export function loadLandmarker(kind: ModelKind): Promise<Landmarker> {
   return p;
 }
 
+/** Drops a cached model (after it fails) so the next set loads a fresh one. */
+export function resetLandmarker(kind: ModelKind) {
+  cache.delete(kind);
+}
+
 async function create(kind: ModelKind): Promise<Landmarker> {
   const base = import.meta.env.BASE_URL;
   const files = await FilesetResolver.forVisionTasks(`${base}mediapipe`);
@@ -37,12 +42,27 @@ async function create(kind: ModelKind): Promise<Landmarker> {
         minPosePresenceConfidence: 0.5,
         minTrackingConfidence: 0.5,
       });
-      return { detect: (v, t) => lm.detectForVideo(v, t), delegate, kind };
+      return { detect: monotonic((v, t) => lm.detectForVideo(v, t)), delegate, kind };
     } catch (e) {
       lastError = e;
     }
   }
   throw lastError;
+}
+
+/**
+ * MediaPipe's video mode needs every timestamp to be later than the last one the model has seen, for the
+ * model's whole lifetime. The model is shared across sets (and a new set's clock restarts at 0), so shift
+ * each set's timestamps forward past the last one used.
+ */
+export function monotonic<V, R>(detect: (v: V, t: number) => R): (v: V, t: number) => R {
+  let last = -Infinity;
+  let offset = 0;
+  return (v, t) => {
+    if (t + offset <= last) offset = last + 1 - t;
+    last = t + offset;
+    return detect(v, last);
+  };
 }
 
 /** The model file, or (in the embed build, for hosts that can't serve .task files) its bytes from base64 text. */

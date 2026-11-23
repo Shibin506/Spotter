@@ -3,7 +3,7 @@ import type { LiveState } from '../core/analyzer';
 import { Coach } from '../core/coach';
 import { EXERCISES, FAULT_TEXT } from '../core/exercises';
 import type { ExerciseId, HoldResult, RepResult, View } from '../core/types';
-import { loadLandmarker, toFrame, type Landmarker } from '../pose/landmarker';
+import { loadLandmarker, resetLandmarker, toFrame, type Landmarker } from '../pose/landmarker';
 import { displayAngle, drawOverlay } from './draw';
 import { SetRecorder, type Recording } from './recorder';
 import type { Settings } from './Setup';
@@ -109,7 +109,16 @@ export default function Session({ settings, source, onDone, onCancel, commands }
     const process = (t: number, adaptRate: boolean) => {
       lastT = t;
       const t0 = performance.now();
-      const result = landmarker.detect(video, t);
+      let result;
+      try {
+        result = landmarker.detect(video, t);
+      } catch (e) {
+        console.error(e);
+        resetLandmarker(landmarker.kind);
+        stopped = true;
+        setError('The pose model hit an error. Tap Back and start the set again.');
+        return;
+      }
       const ms = performance.now() - t0;
       inferAvg = inferAvg ? inferAvg * 0.9 + ms * 0.1 : ms;
       processed++;

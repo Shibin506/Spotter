@@ -33,3 +33,20 @@ test('recognises the exercise on its own in Auto mode', async ({ page }) => {
   await expect(page.locator('.summary')).toBeVisible({ timeout: 90_000 });
   await expect(page.getByRole('heading', { level: 2 })).toContainText('push-ups');
 });
+
+test('runs set after set on the same pose model (regression: timestamp mismatch on the second set)', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/?cpu');
+  await page.getByRole('button', { name: 'Try a sample video' }).click();
+  await expect(page.locator('.summary')).toBeVisible({ timeout: 90_000 });
+  await page.getByRole('button', { name: 'Next set' }).click();
+  await expect(page.locator('.summary')).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByRole('heading', { level: 2 })).toContainText('3 push-ups');
+  await page.getByRole('button', { name: 'Home' }).click();
+  await page.getByRole('button', { name: 'Try a sample video' }).click();
+  await expect(page.locator('.summary')).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByRole('heading', { level: 2 })).toContainText('3 push-ups');
+  await expect(page.getByTestId('banner')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

@@ -14,7 +14,7 @@
 - 🎬 **makes a highlight clip** of the set to share: your reps, a slow-motion freeze-frame of the rep worth a second look, and your stats
 - 📈 **keeps your history** on the device: personal bests, a 14-day chart, and an **estimated 1-rep max** from your bar speed at different weights
 - 🗣️ **listens for voice commands** ("end set", "next set", "mute"), so you never touch the phone with chalky hands
-- 🤖 **writes an AI coach note** from the set's numbers (never the video) with Gemini
+- 🤖 **writes an AI coach note** from the set's numbers (never the video), with an LLM on Groq (or Gemini)
 
 Pose tracking runs **in the browser on your device** (MediaPipe on the GPU, ~30 FPS on a recent phone). The video is never uploaded.
 
@@ -50,7 +50,7 @@ camera frame ─► MediaPipe Pose Landmarker (GPU, WASM) ─► One Euro smooth
 - **1-rep max:** a load–velocity line through your sets at different bar weights, read off at that slowest speed.
 - **Uploaded videos** are analyzed frame by frame (seek, then analyze), so no rep is skipped however slow the phone; the overlay plays along as it goes.
 - **Highlight clip:** the set is recorded on-device (canvas + MediaRecorder). The clip plays the recording once from start to end, slowing down for the chosen rep and freezing at its bottom. It never seeks, because browser-made WebM files often can't seek reliably.
-- **AI coach:** `api/coach.ts` is a Vercel Function. It validates the payload, keeps only known numeric fields, rate-limits each caller, and asks Gemini for three short lines.
+- **AI coach:** `api/coach.ts` is a Vercel Function. It validates the payload, keeps only known numeric fields, rate-limits each caller, and asks an LLM (Groq, or Gemini) for three short lines; if the default model has been retired it picks a current one from the provider's model list.
 
 All analysis lives in `web/src/core/`: plain TypeScript with no browser APIs. The exact same code runs live, in unit tests, on the labelling page and in the eval.
 
@@ -75,7 +75,7 @@ npm run dev        # downloads the pose models once, then serves on http://local
 
 Browsers only allow the camera on HTTPS or localhost.
 - **Deploy:** import the repo into Vercel; `vercel.json` builds `web/` and `api/`.
-- **AI coach note:** set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`) in the Vercel project's environment variables.
+- **AI coach note:** set `GROQ_API_KEY` (or `GEMINI_API_KEY`) in the Vercel project's environment variables; `GROQ_MODEL` / `GEMINI_MODEL` pick the model.
 
 ## Testing
 

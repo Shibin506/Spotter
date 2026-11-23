@@ -36,3 +36,27 @@ describe('AI coach endpoint', () => {
     expect(allow('1.2.3.4', now + 3_700_000)).toBe(true);
   });
 });
+
+describe('AI coach providers', () => {
+  it('uses Groq when a Groq key is set (any of the usual names), else Gemini', async () => {
+    const { envFrom } = await import('../../api/_coach');
+    expect(envFrom({ Groq: 'g' })).toMatchObject({ provider: 'groq', apiKey: 'g' });
+    expect(envFrom({ GROQ_API_KEY: 'g', GEMINI_API_KEY: 'm' })).toMatchObject({ provider: 'groq' });
+    expect(envFrom({ GEMINI_API_KEY: 'm' })).toMatchObject({ provider: 'gemini', apiKey: 'm' });
+    expect(envFrom({}).apiKey).toBeUndefined();
+  });
+
+  it('falls back to a current Groq model when the default one is retired', async () => {
+    const calls: string[] = [];
+    const fake = (async (url: string, init?: { body?: string }) => {
+      calls.push(init?.body ? `chat:${JSON.parse(init.body).model}` : `list:${url}`);
+      if (url.endsWith('/models')) return new Response(JSON.stringify({ data: [{ id: 'llama-guard-4' }, { id: 'openai/gpt-oss-120b' }] }));
+      const model = JSON.parse(init!.body!).model;
+      if (model === 'llama-3.3-70b-versatile') return new Response('{"error":{"code":"model_decommissioned"}}', { status: 400 });
+      return new Response(JSON.stringify({ choices: [{ message: { content: 'Good set.' } }] }));
+    }) as never;
+    const r = await coach(JSON.stringify(set), { apiKey: 'k', provider: 'groq', fetch: fake });
+    expect(r).toMatchObject({ status: 200, body: { note: 'Good set.' } });
+    expect(calls).toEqual(['chat:llama-3.3-70b-versatile', 'list:https://api.groq.com/openai/v1/models', 'chat:openai/gpt-oss-120b']);
+  });
+});

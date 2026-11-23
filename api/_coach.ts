@@ -3,7 +3,12 @@
 
 const EXERCISES = ['squat', 'pushup', 'deadlift', 'lunge', 'ohp', 'plank'] as const;
 const MAX_BODY = 16_000;
-const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
+/** Both providers speak the OpenAI chat-completions format. */
+export const PROVIDERS = {
+  groq: { endpoint: 'https://api.groq.com/openai/v1/chat/completions', models: 'https://api.groq.com/openai/v1/models', model: 'llama-3.3-70b-versatile' },
+  gemini: { endpoint: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', models: null, model: 'gemini-3.5-flash' },
+} as const;
+export type ProviderName = keyof typeof PROVIDERS;
 
 export const SYSTEM = `You are a concise, encouraging strength coach. You get the numbers from one set tracked by a phone camera:
 per-rep timing, joint angles, hipBelowKneeCm (positive = hip that far below the knee, i.e. deep enough;
@@ -14,8 +19,29 @@ Do not diagnose injuries or give medical advice. Do not invent numbers that are 
 
 export interface CoachEnv {
   apiKey: string | undefined;
+  provider?: ProviderName;
   model?: string;
   fetch?: typeof fetch;
+}
+
+/** Picks the provider from whichever key is set: Groq first, then Gemini. */
+export function envFrom(e: Record<string, string | undefined>): CoachEnv {
+  const groq = e.GROQ_API_KEY ?? e.Groq ?? e.GROQ;
+  if (groq) return { apiKey: groq, provider: 'groq', model: e.GROQ_MODEL };
+  return { apiKey: e.GEMINI_API_KEY, provider: 'gemini', model: e.GEMINI_MODEL };
+}
+
+/** When the default model has been retired, choose a current general chat model from the provider's list. */
+async function pickModel(f: typeof fetch, url: string, apiKey: string): Promise<string | null> {
+  const res = await f(url, { headers: { Authorization: `Bearer ${apiKey}` } });
+  if (!res.ok) return null;
+  const ids = (((await res.json()) as { data?: { id: string }[] }).data ?? []).map((m) => m.id);
+  const prefer = [/llama-3\.3-70b/, /gpt-oss-120b/, /llama-4/, /llama/, /gpt-oss/];
+  for (const re of prefer) {
+    const hit = ids.find((id) => re.test(id) && !/guard|whisper|tts|vision/.test(id));
+    if (hit) return hit;
+  }
+  return null;
 }
 
 type Result = { status: number; body: { note?: string; error?: string } };
@@ -53,17 +79,26 @@ export async function coach(bodyText: string, env: CoachEnv): Promise<Result> {
   const v = validate(parsed);
   if (!v.ok) return { status: 400, body: { error: v.error ?? 'invalid set data' } };
 
-  const res = await (env.fetch ?? fetch)(ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.apiKey}` },
-    body: JSON.stringify({
-      model: env.model ?? 'gemini-3.5-flash',
-      messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: JSON.stringify(v.data) }],
-      max_tokens: 1500,
-      reasoning_effort: 'low',
-      temperature: 0.4,
-    }),
-  });
+  const f = env.fetch ?? fetch;
+  const p = PROVIDERS[env.provider ?? 'gemini'];
+  const call = (model: string) =>
+    f(p.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: SYSTEM }, { role: 'user', content: JSON.stringify(v.data) }],
+        max_tokens: env.provider === 'groq' ? 400 : 1500,
+        // Gemini's thinking would otherwise use up the token budget.
+        ...(env.provider === 'groq' ? {} : { reasoning_effort: 'low' }),
+        temperature: 0.4,
+      }),
+    });
+  let res = await call(env.model ?? p.model);
+  if (!res.ok && (res.status === 400 || res.status === 404) && !env.model && p.models) {
+    const other = await pickModel(f, p.models, env.apiKey);
+    if (other) res = await call(other);
+  }
   if (!res.ok) return { status: 502, body: { error: `model error ${res.status}` } };
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const note = data.choices?.[0]?.message?.content?.trim();

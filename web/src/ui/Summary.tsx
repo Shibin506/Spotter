@@ -155,7 +155,7 @@ export default function Summary({ result, onAgain, onHome, onHistory }: Props) {
       {!PREVIEW && exercise && (
         <section className="card" data-testid="ai-coach">
           <h3>AI coach note</h3>
-          <p className="muted small">Sends only the numbers above (never video) to Gemini for a short coaching tip.</p>
+          <p className="muted small">Sends only the numbers above (never video) to an AI model for a short coaching tip.</p>
           {coach.status === 'idle' && <button className="btn ghost" onClick={askCoach}>Get a coaching tip</button>}
           {coach.status === 'loading' && <p className="muted">Thinking…</p>}
           {coach.status === 'done' && <div className="coach-note">{coach.text.split('\n').filter(Boolean).map((l) => <p key={l}>{l}</p>)}</div>}

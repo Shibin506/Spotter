@@ -75,3 +75,31 @@ th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--li
 th { color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
 tr:last-child td { border-bottom: 0; }
 tr.bad td:last-child { color: var(--bad); }
+
+/* v2: exercise picker, history, share, coach */
+.top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.small-btn { padding: 7px 14px; font-size: 0.9rem; }
+.seg-grid { grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); }
+.live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--bad); margin-left: 6px; animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: 0.3; } }
+.speed { font-weight: 800; font-size: 1.15rem; font-variant-numeric: tabular-nums; margin-top: 4px; }
+.speed .bad { color: var(--bad); }
+.chip-auto { display: inline-block; background: rgba(198,244,50,0.18); color: var(--accent); border-radius: 999px; padding: 2px 8px; margin-right: 8px; letter-spacing: 0.06em; }
+.card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+.card.share .btn, .card .btn { margin-top: 6px; }
+.clip { width: 100%; max-height: 60vh; border-radius: 12px; background: #000; margin: 8px 0; display: block; }
+.error-text { color: var(--bad); }
+.coach-note p { margin: 6px 0; }
+.speed-chart { margin: 16px 0 0; }
+.speed-chart svg { width: 100%; height: auto; display: block; margin-top: 6px; }
+.days { display: grid; grid-template-columns: repeat(14, 1fr); gap: 6px; align-items: end; height: 120px; }
+.day { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 4px; }
+.day .bar { width: 100%; max-width: 26px; background: var(--accent); border-radius: 6px 6px 2px 2px; min-height: 2px; }
+.day span { font-size: 0.7rem; color: var(--muted); }
+.bests { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 14px; }
+.best { display: flex; flex-direction: column; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.best b { font-size: 1.4rem; letter-spacing: -0.02em; }
+.recent { list-style: none; padding: 0; margin: 0 0 12px; }
+.recent li { display: grid; grid-template-columns: 120px 110px 1fr; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 0.92rem; }
+.recent li .muted { grid-column: 3; font-size: 0.82rem; }
+@media (max-width: 560px) { .recent li { grid-template-columns: 1fr 1fr; } .recent li .muted { grid-column: 1 / -1; } }

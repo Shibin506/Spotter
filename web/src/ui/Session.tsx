@@ -1,21 +1,33 @@
 import { useEffect, useRef, useState } from 'react';
-import { Analyzer, type LiveState } from '../core/analyzer';
-import { FAULT_TEXT } from '../core/exercises';
-import type { RepResult } from '../core/types';
+import type { LiveState } from '../core/analyzer';
+import { Coach } from '../core/coach';
+import { EXERCISES, FAULT_TEXT } from '../core/exercises';
+import type { ExerciseId, HoldResult, RepResult, View } from '../core/types';
 import { loadLandmarker, toFrame, type Landmarker } from '../pose/landmarker';
-import { drawOverlay } from './draw';
+import { displayAngle, drawOverlay } from './draw';
+import { SetRecorder, type Recording } from './recorder';
 import type { Settings } from './Setup';
 import { Voice } from './speech';
 
 export type Source = { kind: 'camera'; facing: 'user' | 'environment' } | { kind: 'file'; url: string; name: string };
 
 export interface SetResult {
+  exercise: ExerciseId | null;
   reps: RepResult[];
+  hold: HoldResult | null;
+  view: View;
   cmPerUnit: number | null;
   settings: Settings;
   source: string;
   model: { kind: string; delegate: string };
   perf: { fps: number; inferMs: number };
+  recording: Recording | null;
+  endedAt: number;
+}
+
+export interface SessionCommands {
+  end(): void;
+  setMuted(m: boolean): void;
 }
 
 interface Props {
@@ -23,16 +35,19 @@ interface Props {
   source: Source;
   onDone(result: SetResult): void;
   onCancel(): void;
+  /** Lets voice commands reach the running session. */
+  commands?: React.MutableRefObject<SessionCommands | null>;
 }
 
 type VideoWithRvfc = HTMLVideoElement & {
   requestVideoFrameCallback?: (cb: (now: number, meta: { mediaTime: number }) => void) => number;
 };
 
-export default function Session({ settings, source, onDone, onCancel }: Props) {
+export default function Session({ settings, source, onDone, onCancel, commands }: Props) {
   const videoRef = useRef<VideoWithRvfc>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [live, setLive] = useState<LiveState | null>(null);
+  const [exercise, setExercise] = useState<ExerciseId | null>(settings.exercise === 'auto' ? null : settings.exercise);
   const [loading, setLoading] = useState('Loading the pose model…');
   const [error, setError] = useState<string | null>(null);
   const [perf, setPerf] = useState({ fps: 0, inferMs: 0, delegate: '' });
@@ -48,12 +63,21 @@ export default function Session({ settings, source, onDone, onCancel }: Props) {
   }, [muted]);
 
   useEffect(() => {
+    if (!commands) return;
+    commands.current = { end: () => finishRef.current(), setMuted };
+    return () => {
+      commands.current = null;
+    };
+  }, [commands]);
+
+  useEffect(() => {
     let stopped = false;
     let stream: MediaStream | null = null;
     const video = videoRef.current!;
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
-    const analyzer = new Analyzer({ exercise: settings.exercise, barbell: settings.barbell, heightCm: settings.heightCm });
+    const coach = new Coach({ exercise: settings.exercise, barbell: settings.barbell, heightCm: settings.heightCm });
+    let recorder: SetRecorder | null = null;
     let landmarker: Landmarker;
     let lastT = -1;
     let lastPath: { x: number; y: number }[] | null = null;
@@ -62,24 +86,25 @@ export default function Session({ settings, source, onDone, onCancel }: Props) {
     let lastUi = 0;
     let processed = 0;
 
-    const finish = () => {
+    const finish = async () => {
       if (stopped) return;
       stopped = true;
-      const reps = analyzer.finish();
+      const reps = coach.finish();
+      const recording = recorder ? await recorder.stop().catch(() => null) : null;
       onDone({
-        reps, cmPerUnit: analyzer.live.cmPerUnit, settings,
-        source: source.kind === 'file' ? source.name : 'camera',
+        exercise: coach.exercise, reps, hold: coach.analyzer?.holdResult ?? null, view: coach.live.view,
+        cmPerUnit: coach.live.cmPerUnit, settings, source: source.kind === 'file' ? source.name : 'camera',
         model: { kind: landmarker?.kind ?? settings.model, delegate: landmarker?.delegate ?? '' },
-        perf: { fps: fpsOf(times), inferMs: inferAvg },
+        perf: { fps: fpsOf(times), inferMs: inferAvg }, recording, endedAt: Date.now(),
       });
     };
-    finishRef.current = finish;
+    finishRef.current = () => void finish();
 
     const frame = (now: number, mediaTime?: number) => {
       if (stopped) return;
       if (video.readyState >= 2 && video.videoWidth > 0) {
-        // MediaPipe needs strictly increasing timestamps. Files use the video's own clock, so tempo
-        // stays right even when processing is slower than real time.
+        // MediaPipe needs strictly increasing timestamps. Files use the video's own clock, so tempo and
+        // bar speed stay right even when processing is slower than real time.
         const t = Math.max(lastT + 1, Math.round(source.kind === 'file' ? (mediaTime ?? video.currentTime) * 1000 : now));
         if (t !== lastT) {
           lastT = t;
@@ -90,7 +115,6 @@ export default function Session({ settings, source, onDone, onCancel }: Props) {
           processed++;
           if (source.kind === 'file' && processed >= 5) {
             // Slow the clip down when the model can't keep up, so no frames (or reps) are skipped.
-            // Tempo stays right because timestamps come from the video's own clock.
             const rate = Math.min(1, Math.max(0.1, 1000 / 30 / (inferAvg * 1.3)));
             if (Math.abs(video.playbackRate - rate) > 0.05) video.playbackRate = rate;
           }
@@ -100,19 +124,33 @@ export default function Session({ settings, source, onDone, onCancel }: Props) {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
           }
-          const events = analyzer.feed(toFrame(result, t, video.videoWidth / video.videoHeight));
+          const events = coach.feed(toFrame(result, t, video.videoWidth / video.videoHeight));
           for (const e of events) {
-            if (e.type === 'cue') voice.current.say(e.text, e.kind);
+            if (e.type === 'detected') {
+              setExercise(e.exercise);
+              voice.current.say(EXERCISES[e.exercise].plural, 'count');
+            }
+            if (e.type === 'cue') voice.current.say(e.text, e.kind === 'fault' ? 'fault' : 'count');
             if (e.type === 'rep') {
               lastPath = e.rep.path;
               setFlash({ ...e.rep });
             }
             if (e.type === 'rep-updated') setFlash((f) => (f && f.index === e.rep.index ? { ...e.rep } : f));
           }
-          drawOverlay(ctx, analyzer.live, { exercise: settings.exercise, mirror, lastPath });
+          const state = coach.live;
+          drawOverlay(ctx, state, { exercise: coach.exercise, mirror, lastPath });
+          if (!recorder && SetRecorder.supported()) {
+            try {
+              recorder = new SetRecorder(video.videoWidth, video.videoHeight);
+              recorder.start();
+            } catch {
+              recorder = null;
+            }
+          }
+          recorder?.draw(video, canvas, mirror, state, t, coach.exercise ? (state.hold ? 'plank' : EXERCISES[coach.exercise].plural) : 'reps');
           if (performance.now() - lastUi > 80 || events.length) {
             lastUi = performance.now();
-            setLive({ ...analyzer.live, reps: [...analyzer.live.reps] });
+            setLive({ ...state, reps: [...state.reps] });
             setPerf({ fps: fpsOf(times), inferMs: inferAvg, delegate: landmarker.delegate });
           }
         }
@@ -142,7 +180,7 @@ export default function Session({ settings, source, onDone, onCancel }: Props) {
           video.srcObject = stream;
         } else {
           video.src = source.url;
-          video.onended = finish;
+          video.onended = () => void finish();
           // Start slow while the model warms up and its speed is measured; it speeds up after a few frames.
           video.playbackRate = 0.25;
         }
@@ -157,6 +195,7 @@ export default function Session({ settings, source, onDone, onCancel }: Props) {
 
     return () => {
       stopped = true;
+      void recorder?.stop();
       stream?.getTracks().forEach((t) => t.stop());
       video.pause();
     };
@@ -164,8 +203,9 @@ export default function Session({ settings, source, onDone, onCancel }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [facing]);
 
-  const reps = live?.reps.length ?? 0;
-  const angle = live?.angle;
+  const hold = live?.hold;
+  const config = exercise ? EXERCISES[exercise] : null;
+  const last = live?.reps[live.reps.length - 1];
 
   return (
     <div className="session">
@@ -175,13 +215,26 @@ export default function Session({ settings, source, onDone, onCancel }: Props) {
       </div>
 
       <div className="hud-top">
-        <div className="count" data-testid="rep-count">
-          <span className="count-n">{reps}</span>
-          <span className="count-l">reps</span>
+        <div>
+          <div className="count" data-testid="rep-count">
+            <span className="count-n">{config?.mode === 'hold' ? `${Math.floor(hold?.goodSec ?? 0)}s` : live?.reps.length ?? 0}</span>
+            <span className="count-l">{config ? (config.mode === 'hold' ? 'good form' : config.plural) : 'reps'}</span>
+          </div>
+          {last?.velocity != null && config?.mode === 'reps' && (
+            <div className="speed" data-testid="speed">
+              {last.velocity.toFixed(2)} m/s
+              {last.velocityLoss != null && last.index > 1 && <span className={last.velocityLoss >= 0.2 ? 'bad' : ''}> · −{Math.round(last.velocityLoss * 100)}%</span>}
+            </div>
+          )}
+          {config?.mode === 'hold' && hold && <div className="speed">{hold.totalSec.toFixed(0)} s total</div>}
         </div>
         <div className="meter">
-          <div className="phase">{live?.status === 'tracking' ? live.phase : '—'}</div>
-          <div className="angle">{angle != null ? `${Math.round(angle)}°` : '—'}</div>
+          <div className="phase">
+            {settings.exercise === 'auto' && <span className="chip-auto" data-testid="detected">{config ? `Auto · ${config.name}` : 'Auto'}</span>}
+            {live?.status === 'tracking' ? (config?.mode === 'hold' ? (live.holdFault ? FAULT_TEXT[live.holdFault].label : 'holding') : live.phase) : '—'}
+            {live?.view === 'front' && ' · front view'}
+          </div>
+          <div className="angle">{live?.angle != null ? `${Math.round(displayAngle(exercise, live.angle))}°` : '—'}</div>
           <div className="perf" data-testid="perf">
             {perf.fps ? `${perf.fps.toFixed(0)} fps · ${perf.inferMs.toFixed(0)} ms · ${perf.delegate}` : ''}
           </div>
@@ -198,7 +251,9 @@ export default function Session({ settings, source, onDone, onCancel }: Props) {
         <div key={`${flash.index}-${flash.faults.length}`} className={`rep-flash ${flash.faults.length ? 'bad' : 'good'}`}>
           <b>Rep {flash.index}</b>
           {flash.faults.length ? flash.faults.map((f) => <span key={f}>{FAULT_TEXT[f].label}</span>) : <span>Good rep</span>}
-          <span className="muted">↓ {flash.downSec.toFixed(1)}s · ↑ {flash.upSec.toFixed(1)}s</span>
+          <span className="muted">
+            ↓ {flash.downSec.toFixed(1)}s · ↑ {flash.upSec.toFixed(1)}s{flash.velocity != null && ` · ${flash.velocity.toFixed(2)} m/s`}
+          </span>
         </div>
       )}
 

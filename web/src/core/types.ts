@@ -36,8 +36,9 @@ export const LM = {
 } as const;
 
 export type Side = 'left' | 'right';
+export type View = 'side' | 'front';
 
-/** The landmarks of one side of the body, the side facing the camera in a side view. */
+/** The landmarks of one side of the body, in frame-height units (x scaled by the aspect ratio). */
 export interface SideJoints {
   shoulder: Landmark;
   elbow: Landmark;
@@ -47,36 +48,56 @@ export interface SideJoints {
   ankle: Landmark;
 }
 
-export type ExerciseId = 'squat' | 'pushup';
+export type ExerciseId = 'squat' | 'pushup' | 'deadlift' | 'lunge' | 'ohp' | 'plank';
 
-export type FaultId = 'shallow' | 'no-lockout' | 'forward-lean' | 'hip-sag' | 'hip-pike';
+export type FaultId =
+  | 'shallow'
+  | 'no-lockout'
+  | 'forward-lean'
+  | 'lean-back'
+  | 'hip-sag'
+  | 'hip-pike'
+  | 'knees-in'
+  | 'hips-rise-first';
 
 export interface RepResult {
   index: number;
-  /** When the rep left the top position, the bottom was reached, and the top was regained (ms). */
+  /** When the rep left the start position, reached its turning point, and got back (ms). */
   tStart: number;
   tBottom: number;
   tEnd: number;
-  /** Seconds lowering and seconds rising. */
+  /** Seconds in the first half of the rep (lowering, or pressing for the overhead press) and the second half. */
   downSec: number;
   upSec: number;
-  /** Smallest value of the exercise's main joint angle (knee for squats, elbow for push-ups), degrees. */
+  /** Smallest value of the exercise's main angle during the rep, degrees. */
   minAngle: number;
-  /** Largest main joint angle after the rep, degrees; used for the lockout check. */
+  /** Largest main angle after the rep, degrees; used for the lockout check. */
   lockoutAngle: number | null;
-  /**
-   * Squat: how far the hip went below the knee at the bottom, as a fraction of thigh length
-   * (positive = below parallel). Push-up: unused (null).
-   */
+  /** Squat/lunge: how far the hip went below the knee, as a fraction of thigh length (positive = below parallel). */
   depth: number | null;
-  /** Squat: how far the hip went below the knee at the bottom, in frame-height units (for centimetres). */
+  /** The same in frame-height units (for centimetres). */
   depthUnits: number | null;
-  /** Squat: largest torso angle from vertical during the rep. Push-up: worst body-line deviation. Degrees. */
+  /** Largest torso angle from vertical (squat, lunge, press) or body-line deviation (push-up), degrees. */
   maxLean: number;
   /** Push-up: worst hip offset from the shoulder-to-ankle line, fraction of body length (+ = sag). */
   hipOffset: number | null;
-  /** Bar (or hip) path during the rep in frame-height units, and its widest horizontal drift. */
+  /** Front-view squat: narrowest knee width / ankle width (below 1 = knees inside the feet). */
+  kneeRatio: number | null;
+  /** Path of the tracked point (bar, hip or shoulder) during the rep, normalized image coordinates. */
   path: { x: number; y: number }[];
+  /** Widest horizontal drift of the tracked point, frame-height units. */
   drift: number;
+  /** Mean speed of the tracked point over the lifting half of the rep, m/s (null until the scale is known). */
+  velocity: number | null;
+  /** Speed lost against the fastest of the first reps, 0..1. */
+  velocityLoss: number | null;
   faults: FaultId[];
+}
+
+/** Plank (or any hold): how long it was held, and how long with good form. */
+export interface HoldResult {
+  totalSec: number;
+  goodSec: number;
+  /** Seconds spent with each fault. */
+  faultSec: Partial<Record<FaultId, number>>;
 }

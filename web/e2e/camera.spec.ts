@@ -15,7 +15,7 @@ test.use({
 
 test('tracks a person from the camera and counts reps', async ({ page }) => {
   await page.goto('/?cpu');
-  await page.getByRole('button', { name: 'Push-up' }).click();
+  await page.getByTestId('exercise-picker').getByRole('button', { name: 'Push-up' }).click();
   await page.getByRole('button', { name: 'Start camera' }).click();
   await expect(page.getByTestId('perf')).toContainText('fps', { timeout: 60_000 });
   await expect

@@ -21,7 +21,9 @@ describe('set summary', () => {
 
   it('notices when rising slows down across the set', () => {
     const { reps, cmPerUnit } = setOf([{ bottom: 58, up: 0.8 }, { bottom: 58, up: 0.8 }, { bottom: 58, up: 1.0 }, { bottom: 58, up: 1.8 }]);
-    expect(summarize(reps, 'squat', cmPerUnit).notes.join(' ')).toMatch(/You slowed down: rep 4/);
+    expect(summarize(reps, 'squat', cmPerUnit).notes.join(' ')).toMatch(/Last rep was \d+% slower/);
+    // Without a scale for m/s it falls back to rising time.
+    expect(summarize(reps.map((r) => ({ ...r, velocity: null })), 'squat', null).notes.join(' ')).toMatch(/You slowed down: rep 4/);
   });
 
   it('handles an empty set', () => {

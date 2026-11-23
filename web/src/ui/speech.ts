@@ -25,3 +25,8 @@ export class Voice {
     speechSynthesis.speak(u);
   }
 }
+
+/** Call from a tap (e.g. Start camera): iOS only allows speech that starts from a user gesture. */
+export function unlockSpeech() {
+  new Voice().unlock();
+}

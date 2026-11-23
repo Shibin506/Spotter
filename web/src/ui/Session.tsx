@@ -9,7 +9,10 @@ import { SetRecorder, type Recording } from './recorder';
 import type { Settings } from './Setup';
 import { Voice } from './speech';
 
-export type Source = { kind: 'camera'; facing: 'user' | 'environment' } | { kind: 'file'; url: string; name: string };
+export type Source =
+  | { kind: 'camera'; facing: 'user' | 'environment' }
+  /** `exercise` overrides the chosen exercise for this video only (the sample is always push-ups). */
+  | { kind: 'file'; url: string; name: string; exercise?: ExerciseId };
 
 export interface SetResult {
   exercise: ExerciseId | null;
@@ -47,7 +50,8 @@ export default function Session({ settings, source, onDone, onCancel, commands }
   const videoRef = useRef<VideoWithRvfc>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [live, setLive] = useState<LiveState | null>(null);
-  const [exercise, setExercise] = useState<ExerciseId | null>(settings.exercise === 'auto' ? null : settings.exercise);
+  const initial = (source.kind === 'file' && source.exercise) || settings.exercise;
+  const [exercise, setExercise] = useState<ExerciseId | null>(initial === 'auto' ? null : initial);
   const [loading, setLoading] = useState('Loading the pose model…');
   const [error, setError] = useState<string | null>(null);
   const [perf, setPerf] = useState({ fps: 0, inferMs: 0, delegate: '' });
@@ -77,7 +81,8 @@ export default function Session({ settings, source, onDone, onCancel, commands }
     const video = videoRef.current!;
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
-    const coach = new Coach({ exercise: settings.exercise, barbell: settings.barbell, heightCm: settings.heightCm });
+    const choice = (source.kind === 'file' && source.exercise) || settings.exercise;
+    const coach = new Coach({ exercise: choice, barbell: settings.barbell, heightCm: settings.heightCm });
     let recorder: SetRecorder | null = null;
     let landmarker: Landmarker;
     let lastT = -1;
@@ -185,10 +190,7 @@ export default function Session({ settings, source, onDone, onCancel, commands }
     const stepThrough = async () => {
       const n = Math.floor(video.duration * 30);
       for (let i = 0; i < n && !stopped; i++) {
-        await new Promise<void>((resolve) => {
-          video.addEventListener('seeked', () => resolve(), { once: true });
-          video.currentTime = i / 30;
-        });
+        await seekTo(video, i / 30);
         if (stopped) return;
         process(Math.round(i * frameMs) + 1, false);
         if (i % 15 === 0) setFileProgress(i / n);
@@ -224,6 +226,9 @@ export default function Session({ settings, source, onDone, onCancel, commands }
           });
           if (stopped) return;
           if (Number.isFinite(video.duration) && video.duration > 0) {
+            // iOS Safari only decodes frames of a video that has played: play a moment, then step through.
+            await video.play().catch(() => undefined);
+            video.pause();
             setLoading('');
             await stepThrough();
             return;
@@ -278,7 +283,7 @@ export default function Session({ settings, source, onDone, onCancel, commands }
         </div>
         <div className="meter">
           <div className="phase">
-            {settings.exercise === 'auto' && <span className="chip-auto" data-testid="detected">{config ? `Auto · ${config.name}` : 'Auto'}</span>}
+            {initial === 'auto' && <span className="chip-auto" data-testid="detected">{config ? `Auto · ${config.name}` : 'Auto'}</span>}
             {live?.status === 'tracking' ? (config?.mode === 'hold' ? (live.holdFault ? FAULT_TEXT[live.holdFault].label : 'holding') : live.phase) : '—'}
             {live?.view === 'front' && ' · front view'}
           </div>
@@ -316,6 +321,20 @@ export default function Session({ settings, source, onDone, onCancel, commands }
       </div>
     </div>
   );
+}
+
+/** Seeks and waits for the frame; gives up waiting after 2 s so a missing 'seeked' event can't stall the set. */
+function seekTo(video: HTMLVideoElement, t: number): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      video.removeEventListener('seeked', done);
+      resolve();
+    };
+    const timer = setTimeout(done, 2000);
+    video.addEventListener('seeked', done);
+    video.currentTime = t;
+  });
 }
 
 function friendlyError(e: unknown): string {

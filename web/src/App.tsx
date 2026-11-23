@@ -55,7 +55,9 @@ export default function App() {
         commands={commands}
         onCancel={() => setScreen({ name: 'setup' })}
         onDone={(result) => {
-          if (result.exercise) {
+          // The sample video is a test mannequin: don't count it as a workout.
+          const isSample = screen.source.kind === 'file' && !!screen.source.exercise;
+          if (result.exercise && !isSample) {
             history.add(toSavedSet(result.exercise, result.reps, result.hold, usesBarWeight(settings) ? settings.weightKg : 0, result.endedAt));
           }
           setScreen({ name: 'summary', result, source: screen.source });

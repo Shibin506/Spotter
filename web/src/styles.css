@@ -105,3 +105,17 @@ tr.bad td:last-child { color: var(--bad); }
 .recent li { display: grid; grid-template-columns: 120px 110px 1fr; gap: 4px 12px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 0.92rem; }
 .recent li .muted { grid-column: 3; font-size: 0.82rem; }
 @media (max-width: 560px) { .recent li { grid-template-columns: 1fr 1fr; } .recent li .muted { grid-column: 1 / -1; } }
+.foot a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+
+/* Phones: one compact row of controls, rep card above it, tighter tables. */
+@media (max-width: 520px) {
+  .controls { flex-wrap: nowrap; gap: 6px; padding-left: 8px; padding-right: 8px; }
+  .controls .btn { padding: 9px 12px; font-size: 0.85rem; white-space: nowrap; }
+  .rep-flash { bottom: 84px; left: 10px; font-size: 0.92rem; }
+  .hud-top { padding-left: 12px; padding-right: 12px; }
+  .angle { font-size: 1.5rem; }
+  th, td { padding: 8px 7px; font-size: 0.85rem; }
+  .speed-chart text { font-size: 18px; }
+  td:last-child { white-space: normal; min-width: 96px; }
+  .hide-sm { display: none; }
+}

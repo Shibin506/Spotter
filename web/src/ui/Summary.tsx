@@ -109,7 +109,7 @@ export default function Summary({ result, onAgain, onHome, onHistory }: Props) {
                 <th>Rep</th>
                 <th>Angle</th>
                 {(exercise === 'squat' || exercise === 'lunge') && <th>Hip vs knee</th>}
-                <th>Down</th>
+                <th className="hide-sm">Down</th>
                 <th>Up</th>
                 {hasVelocity && <th>Speed</th>}
                 <th>Flags</th>
@@ -121,7 +121,7 @@ export default function Summary({ result, onAgain, onHome, onHistory }: Props) {
                   <td>{r.index}</td>
                   <td>{Math.round(exercise === 'ohp' ? 180 - r.minAngle : r.minAngle)}°</td>
                   {(exercise === 'squat' || exercise === 'lunge') && <td>{cm(r.depthUnits)}</td>}
-                  <td>{r.downSec.toFixed(1)} s</td>
+                  <td className="hide-sm">{r.downSec.toFixed(1)} s</td>
                   <td>{r.upSec.toFixed(1)} s</td>
                   {hasVelocity && <td>{r.velocity !== null ? `${r.velocity.toFixed(2)} m/s` : '—'}</td>}
                   <td>{r.faults.length ? r.faults.map((f) => FAULT_TEXT[f].label).join(', ') : '✓'}</td>
@@ -198,8 +198,8 @@ function SpeedChart({ reps, bar }: { reps: SetResult['reps']; bar: boolean }) {
           return (
             <g key={i}>
               <rect x={x} y={y(val)} width={bw} height={Math.max(0, H - pad - y(val))} rx="4" fill={low ? '#fb7185' : '#c6f432'} />
-              <text x={x + bw / 2} y={y(val) - 6} textAnchor="middle" fontSize="12" fill="#e5e8eb">{val ? val.toFixed(2) : '—'}</text>
-              <text x={x + bw / 2} y={H - 8} textAnchor="middle" fontSize="12" fill="#9aa3ad">{i + 1}</text>
+              <text x={x + bw / 2} y={y(val) - 6} textAnchor="middle" fontSize="15" fill="#e5e8eb">{val ? val.toFixed(2) : '—'}</text>
+              <text x={x + bw / 2} y={H - 6} textAnchor="middle" fontSize="15" fill="#9aa3ad">{i + 1}</text>
             </g>
           );
         })}

@@ -3,6 +3,7 @@ import type { ExerciseChoice } from '../core/coach';
 import { EXERCISES, EXERCISE_IDS } from '../core/exercises';
 import type { ModelKind } from '../pose/landmarker';
 import type { Source } from './Session';
+import { unlockSpeech } from './speech';
 
 export interface Settings {
   exercise: ExerciseChoice;
@@ -119,14 +120,14 @@ export default function Setup({ settings: s, onChange, onStart, onHistory, voice
 
       <div className="actions">
         {!PREVIEW && (
-          <button className="btn primary big" onClick={() => onStart({ kind: 'camera', facing: 'user' })}>Start camera</button>
+          <button className="btn primary big" onClick={() => { unlockSpeech(); onStart({ kind: 'camera', facing: 'user' }); }}>Start camera</button>
         )}
         <button className={`btn big ${PREVIEW ? 'primary' : 'ghost'}`} onClick={() => file.current?.click()}>Analyze a video</button>
         <button
           className="btn ghost big"
           onClick={() => {
-            onChange({ ...s, exercise: 'pushup' });
-            onStart({ kind: 'file', url: `${import.meta.env.BASE_URL}sample-pushup.webm`, name: 'sample (test mannequin)' });
+            unlockSpeech();
+            onStart({ kind: 'file', url: `${import.meta.env.BASE_URL}sample-pushup.webm`, name: 'sample (test mannequin)', exercise: 'pushup' });
           }}
         >
           Try a sample video
@@ -139,7 +140,10 @@ export default function Setup({ settings: s, onChange, onStart, onHistory, voice
           data-testid="file-input"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (f) onStart({ kind: 'file', url: URL.createObjectURL(f), name: f.name });
+            if (f) {
+              unlockSpeech();
+              onStart({ kind: 'file', url: URL.createObjectURL(f), name: f.name });
+            }
             e.target.value = '';
           }}
         />
@@ -154,6 +158,7 @@ export default function Setup({ settings: s, onChange, onStart, onHistory, voice
 
       <footer className="foot">
         Pose tracking by MediaPipe, running on your device. Spotter is a training aid, not medical advice.
+        {!PREVIEW && <> · <a href={`${import.meta.env.BASE_URL}label.html`}>Label clips for accuracy testing</a></>}
       </footer>
     </main>
   );

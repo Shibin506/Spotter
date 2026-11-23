@@ -1,0 +1,13 @@
+{
+  "format": "spotter-labels/1",
+  "video": { "name": "mannequin-pushup.webm", "durationSec": 9.5 },
+  "exercise": "pushup",
+  "heightCm": 175,
+  "truth": {
+    "reps": [
+      { "t": 2.1, "faults": [] },
+      { "t": 4.6, "faults": ["shallow"] },
+      { "t": 7.1, "faults": [] }
+    ]
+  }
+}

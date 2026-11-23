@@ -75,6 +75,8 @@ export interface ExerciseConfig {
   minVelocity: number | null;
   /** Setup tip shown before starting. */
   tip: string;
+  /** Form flags this exercise can raise (for labelling). */
+  faultIds: FaultId[];
   measure(f: FrameInput, barbell: boolean): FrameMetrics;
   faults(r: RepStats): FaultId[];
 }
@@ -148,6 +150,7 @@ export const EXERCISES: Record<ExerciseId, ExerciseConfig> = {
     id: 'squat', name: 'Squat', plural: 'squats', mode: 'reps', views: ['side', 'front'],
     keyJoints: ['shoulder', 'hip', 'knee', 'ankle'],
     top: 155, descend: 145, reverse: 10, minBottom: 130, lockout: 165, lifting: 'up', minVelocity: 0.3,
+    faultIds: ['shallow', 'no-lockout', 'forward-lean', 'knees-in'],
     tip: 'Side-on checks depth and lean; facing the camera checks your knees. Phone at hip height, 2–3 m away.',
     measure(f, barbell) {
       if (f.view === 'front') return frontSquatMetrics(f, barbell);
@@ -167,6 +170,7 @@ export const EXERCISES: Record<ExerciseId, ExerciseConfig> = {
     id: 'pushup', name: 'Push-up', plural: 'push-ups', mode: 'reps', views: ['side'],
     keyJoints: ['shoulder', 'elbow', 'wrist', 'hip', 'ankle'],
     top: 145, descend: 135, reverse: 10, minBottom: 120, lockout: 155, lifting: 'up', minVelocity: null,
+    faultIds: ['shallow', 'hip-sag', 'hip-pike', 'no-lockout'],
     tip: 'Phone on the floor, 1.5–2 m away, side-on, so your head and feet are both in frame.',
     measure(f) {
       const j = f.near;
@@ -185,6 +189,7 @@ export const EXERCISES: Record<ExerciseId, ExerciseConfig> = {
     id: 'deadlift', name: 'Deadlift', plural: 'deadlifts', mode: 'reps', views: ['side'],
     keyJoints: ['shoulder', 'hip', 'knee', 'ankle'],
     top: 158, descend: 148, reverse: 10, minBottom: 135, lockout: 168, lifting: 'up', minVelocity: 0.15,
+    faultIds: ['hips-rise-first', 'no-lockout'],
     tip: 'Side-on, phone at hip height, 2–3 m away. The main angle is your hip hinge.',
     measure(f) {
       const j = f.near;
@@ -211,6 +216,7 @@ export const EXERCISES: Record<ExerciseId, ExerciseConfig> = {
     id: 'lunge', name: 'Lunge', plural: 'lunges', mode: 'reps', views: ['side'],
     keyJoints: ['shoulder', 'hip', 'knee', 'ankle'],
     top: 150, descend: 140, reverse: 10, minBottom: 125, lockout: 0, lifting: 'up', minVelocity: null,
+    faultIds: ['shallow', 'forward-lean'],
     tip: 'Side-on with the leg nearest the camera in front, 2–3 m away.',
     measure(f) {
       const j = f.near;
@@ -229,6 +235,7 @@ export const EXERCISES: Record<ExerciseId, ExerciseConfig> = {
     keyJoints: ['shoulder', 'elbow', 'wrist', 'hip'],
     // The press starts at the bottom, so its main angle is 180° − elbow: it "goes down" as you press up.
     top: 85, descend: 75, reverse: 10, minBottom: 40, lockout: 0, lifting: 'down', minVelocity: 0.2,
+    faultIds: ['no-lockout', 'lean-back'],
     tip: 'Side-on or facing the camera, with your hands visible above your head at the top.',
     measure(f) {
       const j = f.near;
@@ -246,6 +253,7 @@ export const EXERCISES: Record<ExerciseId, ExerciseConfig> = {
     id: 'plank', name: 'Plank', plural: 'planks', mode: 'hold', views: ['side'],
     keyJoints: ['shoulder', 'hip', 'ankle'],
     top: 0, descend: 0, reverse: 0, minBottom: 0, lockout: 0, lifting: 'up', minVelocity: null,
+    faultIds: ['hip-sag', 'hip-pike'],
     tip: 'Phone on the floor, 1.5–2 m away, side-on. The timer runs while your body is in a straight line.',
     measure(f) {
       const j = f.near;

@@ -1,0 +1,3 @@
+# Real clips stay local unless you choose to commit them; the mannequin smoke-test clip is tracked.
+clips/*
+!clips/mannequin-pushup.webm

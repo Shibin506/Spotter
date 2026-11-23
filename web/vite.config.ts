@@ -37,5 +37,11 @@ export default defineConfig(({ mode }) => ({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      // The labelling page ships with the app; the embed preview leaves it out (it needs downloads).
+      input: (mode === 'embed' ? { main: 'index.html' } : { main: 'index.html', label: 'label.html' }) as Record<string, string>,
+    },
+  },
   server: { host: true },
 }));

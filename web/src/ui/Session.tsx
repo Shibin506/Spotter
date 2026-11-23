@@ -60,6 +60,7 @@ export default function Session({ settings, source, onDone, onCancel }: Props) {
     const times: number[] = [];
     let inferAvg = 0;
     let lastUi = 0;
+    let processed = 0;
 
     const finish = () => {
       if (stopped) return;
@@ -86,6 +87,13 @@ export default function Session({ settings, source, onDone, onCancel }: Props) {
           const result = landmarker.detect(video, t);
           const ms = performance.now() - t0;
           inferAvg = inferAvg ? inferAvg * 0.9 + ms * 0.1 : ms;
+          processed++;
+          if (source.kind === 'file' && processed >= 5) {
+            // Slow the clip down when the model can't keep up, so no frames (or reps) are skipped.
+            // Tempo stays right because timestamps come from the video's own clock.
+            const rate = Math.min(1, Math.max(0.1, 1000 / 30 / (inferAvg * 1.3)));
+            if (Math.abs(video.playbackRate - rate) > 0.05) video.playbackRate = rate;
+          }
           times.push(performance.now());
           if (times.length > 30) times.shift();
           if (canvas.width !== video.videoWidth) {
@@ -135,13 +143,15 @@ export default function Session({ settings, source, onDone, onCancel }: Props) {
         } else {
           video.src = source.url;
           video.onended = finish;
+          // Start slow while the model warms up and its speed is measured; it speeds up after a few frames.
+          video.playbackRate = 0.25;
         }
         await video.play();
         if (stopped) return;
         setLoading('');
         schedule();
       } catch (e) {
-        setError(e instanceof Error ? `${e.name}: ${e.message}` : String(e));
+        setError(friendlyError(e));
       }
     })();
 
@@ -202,6 +212,14 @@ export default function Session({ settings, source, onDone, onCancel }: Props) {
       </div>
     </div>
   );
+}
+
+function friendlyError(e: unknown): string {
+  const name = e instanceof Error ? e.name : '';
+  if (name === 'NotAllowedError') return 'Camera access was blocked. Allow the camera for this site, or go back and analyze a video instead.';
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'No camera was found. Go back and analyze a video instead.';
+  if (name === 'NotReadableError') return 'The camera is in use by another app. Close it and try again.';
+  return e instanceof Error ? `${e.name}: ${e.message}` : String(e);
 }
 
 function fpsOf(times: number[]): number {

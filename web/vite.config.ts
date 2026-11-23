@@ -2,10 +2,12 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig({
+// `--mode embed` builds a copy for an embedded preview: relative paths, no service worker.
+export default defineConfig(({ mode }) => ({
+  base: mode === 'embed' ? './' : '/',
   plugins: [
     react(),
-    VitePWA({
+    mode !== 'embed' && VitePWA({
       registerType: 'autoUpdate',
       manifest: {
         name: 'Spotter — real-time form coach',
@@ -36,4 +38,4 @@ export default defineConfig({
     }),
   ],
   server: { host: true },
-});
+}));

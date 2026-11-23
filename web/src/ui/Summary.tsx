@@ -1,6 +1,7 @@
 import { FAULT_TEXT } from '../core/exercises';
 import { summarize } from '../core/insights';
 import type { SetResult } from './Session';
+import { PREVIEW } from './Setup';
 
 interface Props {
   result: SetResult;
@@ -68,7 +69,7 @@ export default function Summary({ result, onAgain, onHome }: Props) {
 
       <div className="actions">
         <button className="btn primary big" onClick={onAgain}>Next set</button>
-        <button className="btn ghost big" onClick={download}>Download data</button>
+        {!PREVIEW && <button className="btn ghost big" onClick={download}>Download data</button>}
         <button className="btn ghost big" onClick={onHome}>Home</button>
       </div>
     </main>

@@ -17,6 +17,9 @@ interface Props {
   onStart(source: Source): void;
 }
 
+/** Built for an embedded preview (no camera, no downloads): see `npm run build:embed`. */
+export const PREVIEW = import.meta.env.MODE === 'embed';
+
 const TIPS: Record<ExerciseId, string> = {
   squat: 'Put your phone at hip height, 2–3 m away, side-on, with your whole body in frame.',
   pushup: 'Put your phone on the floor, 1.5–2 m away, side-on, so your head and feet are both in frame.',
@@ -80,8 +83,19 @@ export default function Setup({ settings: s, onChange, onStart }: Props) {
       </section>
 
       <div className="actions">
-        <button className="btn primary big" onClick={() => onStart({ kind: 'camera', facing: 'user' })}>Start camera</button>
-        <button className="btn ghost big" onClick={() => file.current?.click()}>Analyze a video</button>
+        {!PREVIEW && (
+          <button className="btn primary big" onClick={() => onStart({ kind: 'camera', facing: 'user' })}>Start camera</button>
+        )}
+        <button className={`btn big ${PREVIEW ? 'primary' : 'ghost'}`} onClick={() => file.current?.click()}>Analyze a video</button>
+        <button
+          className="btn ghost big"
+          onClick={() => {
+            onChange({ ...s, exercise: 'pushup' });
+            onStart({ kind: 'file', url: `${import.meta.env.BASE_URL}sample-pushup.webm`, name: 'sample (test mannequin)' });
+          }}
+        >
+          Try a sample video
+        </button>
         <input
           ref={file}
           type="file"
@@ -95,6 +109,13 @@ export default function Setup({ settings: s, onChange, onStart }: Props) {
           }}
         />
       </div>
+
+      {PREVIEW && (
+        <p className="tip">
+          This preview can't use your camera. Upload a side-on clip of your squats or push-ups, or try the sample
+          (a drawn test mannequin doing 3 push-ups). The installed app adds live camera coaching.
+        </p>
+      )}
 
       <footer className="foot">
         Pose tracking by MediaPipe, running on your device. Spotter is a training aid, not medical advice.

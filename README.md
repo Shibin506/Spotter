@@ -1,12 +1,20 @@
-# Spotter — a real-time form coach that runs on your phone
+# Spotter — a real-time AI form coach that runs on your phone
 
-Prop your phone up side-on, lift, and Spotter:
+**[Try it live ↗](https://spotter-gray.vercel.app)** · prop your phone up, lift, and Spotter:
 
-- 🔢 **counts your reps** live and times each one (seconds down / seconds up)
-- ✅ **checks every rep**: squat depth (hip below knee), lockout and torso lean; push-up depth and hips sagging or piking
-- 📈 **traces your bar path** (or hip path) over the video
-- 🔊 **calls out a fix** the moment a rep finishes ("Deeper", "Squeeze your glutes"), or just says the count when the rep is clean
-- 📝 **sums up the set**: which reps were flagged, the shallowest rep against your typical one, and whether you slowed down
+- 🧠 **recognises the exercise** from your first rep: squat, push-up, deadlift, lunge, overhead press or plank
+- 🔢 **counts reps** and times each one (seconds down / seconds up), or times your plank while your body stays straight
+- ✅ **checks every rep**:
+  - squat: depth, lockout, forward lean, and **knees caving in** (filmed from the front)
+  - deadlift: **hips rising before the chest**
+  - press: incomplete lockout and leaning back
+  - push-up and plank: hips sagging or piking
+- ⚡ **measures bar speed** in m/s from the camera alone. When speed drops 20%, it says *"Speed down 22%. About 2 left"*
+- 🔊 **calls out the fix** the moment a rep ends ("Deeper", "Knees out"), or just the count when the rep is clean
+- 🎬 **makes a highlight clip** of the set to share: your reps, a slow-motion freeze-frame of the rep worth a second look, and your stats
+- 📈 **keeps your history** on the device: personal bests, a 14-day chart, and an **estimated 1-rep max** from your bar speed at different weights
+- 🗣️ **listens for voice commands** ("end set", "next set", "mute"), so you never touch the phone with chalky hands
+- 🤖 **writes an AI coach note** from the set's numbers (never the video) with Gemini
 
 Pose tracking runs **in the browser on your device** (MediaPipe on the GPU, ~30 FPS on a recent phone). The video is never uploaded.
 
@@ -15,8 +23,8 @@ Pose tracking runs **in the browser on your device** (MediaPipe on the GPU, ~30 
 </p>
 
 <p align="center">
-  <img src="docs/images/setup.png" alt="Setup screen" width="405"/>
-  <img src="docs/images/summary.png" alt="Set summary with per-rep table" width="405"/>
+  <img src="docs/images/summary.png" alt="Set summary: notes, bar speed chart, per-rep table and the share clip" width="405"/>
+  <img src="docs/images/history.png" alt="History: 14-day chart, personal bests and recent sets" width="405"/>
 </p>
 
 > The screenshots use a **drawn test mannequin**, not a real person: it is how CI tests the full pipeline without footage of anyone (see [Testing](#testing)).
@@ -24,28 +32,37 @@ Pose tracking runs **in the browser on your device** (MediaPipe on the GPU, ~30 
 ## How it works
 
 ```
-camera frame ─► MediaPipe Pose Landmarker (GPU, WASM) ─► One Euro smoothing ─► joint angles, hip vs knee
-                                                                                    │
-                         rep state machine: waiting → top → down → up → top ◄───────┘
-                                    │ on each finished rep
-                   depth / lockout / lean / hip checks · tempo · path drift
-                                    │
-                 overlay + spoken cue (same frame) ─► set summary when you stop
+camera frame ─► MediaPipe Pose Landmarker (GPU, WASM) ─► One Euro smoothing ─► side / front view
+                                                                                   │
+           Auto: recognise the exercise from the first full rep, replay buffered frames ◄──┘
+                                   │
+     rep state machine on the exercise's main angle: waiting → top → down → up → top
+                                   │ on each finished rep
+   form checks · tempo · bar path · bar speed (m/s) · speed loss · "stop" cue · reps-left estimate
+                                   │
+     overlay + spoken cue (same frame) · on-device recording ─► summary, highlight clip, history
 ```
 
-- **Pose:** [MediaPipe Pose Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker) (BlazePose, 33 landmarks), Lite or Full model, GPU delegate with a CPU fallback. The WASM runtime and models are served by the app itself and cached for offline use (PWA).
-- **Smoothing:** a [One Euro filter](https://gery.casiez.net/1euro/) per coordinate: steady when you are still, little lag when you move.
-- **Side choice:** uses the side of the body facing the camera, by landmark visibility, and only switches when the other side is clearly better.
-- **Rep counting:** a state machine on the main joint angle (knee for squats, elbow for push-ups) with hysteresis, so small dips and bounces at the bottom are not counted as reps.
-- **Form checks** (`web/src/core/exercises.ts`):
-  - Squat depth: hip lower than the knee at the deepest point, measured relative to thigh length.
-  - Lockout: the joint gets back to near-straight before the next rep, so this flag lands when the next rep starts.
-  - Squat torso lean: more than 60° from vertical.
-  - Push-ups: elbow angle at the bottom, and the hip's distance above or below the shoulder-to-ankle line.
-- **Centimetres:** estimated from your height and your measured leg length (thigh + shin ≈ 49% of height).
-- **Voice:** the browser's built-in speech, so cues have no network delay.
+- **Pose:** [MediaPipe Pose Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker) (BlazePose, 33 landmarks), Lite or Full model, GPU delegate with a CPU fallback. It's served by the app and cached for offline use (PWA).
+- **Views:** the analyzer detects a front or side view from shoulder width against torso length. From the front, knee angles can't be read, so squat depth comes from how much the thigh shortens on screen, and the knee-to-ankle width ratio catches knees caving in.
+- **Rep counting:** a state machine with hysteresis on each exercise's main angle. The press is counted from the bottom (180° − elbow), and small dips and bounces don't count as reps.
+- **Bar speed:** vertical travel of the tracked point (bar, hips or shoulders) over the lifting half of each rep. Pixels are turned into metres from your height and measured leg length (thigh + shin ≈ 49% of height). Reps left = a straight-line fit of the last reps' speeds, extended down to the slowest speed a rep usually succeeds at (e.g. 0.3 m/s for squats).
+- **1-rep max:** a load–velocity line through your sets at different bar weights, read off at that slowest speed.
+- **Highlight clip:** the set is recorded on-device (canvas + MediaRecorder). The clip plays the recording once from start to end, slowing down for the chosen rep and freezing at its bottom. It never seeks, because browser-made WebM files often can't seek reliably.
+- **AI coach:** `api/coach.ts` is a Vercel Function. It validates the payload, keeps only known numeric fields, rate-limits each caller, and asks Gemini for three short lines.
 
-All of the analysis lives in `web/src/core/`: plain TypeScript with no browser APIs, so the exact same code runs live, in unit tests and in evaluation scripts.
+All analysis lives in `web/src/core/`: plain TypeScript with no browser APIs. The exact same code runs live, in unit tests, on the labelling page and in the eval.
+
+## Measuring accuracy and training a model
+
+- **`/label.html`:** analyze a clip frame by frame (deterministic), fix the reps and flags Spotter got wrong, and export labels with the per-frame landmarks.
+- **`web/scripts/run-eval.mjs`:** re-scores every labelled clip and writes [`eval/report.md`](eval/report.md):
+  - rep recall and precision, and the share of clips with the exact rep count;
+  - per-flag precision, recall and F1;
+  - per-frame latency.
+- **[`ml/`](ml/):** turns labelled reps into angle sequences, trains a small **PyTorch** 1-D CNN with a train/test split by clip, and exports it to **ONNX** for the browser. The model only ships where it beats the rules on held-out clips.
+
+**Status:** the tooling is built and tested end to end. The current report is a smoke test on the mannequin clip. Real-footage numbers come next.
 
 ## Run it
 
@@ -55,36 +72,30 @@ npm install
 npm run dev        # downloads the pose models once, then serves on http://localhost:5173
 ```
 
-On a phone, open the dev server's network URL over HTTPS (browsers only allow the camera on HTTPS or localhost), or deploy it.
-**Deploy:** import the repo into Vercel; `vercel.json` builds the `web/` app.
+Browsers only allow the camera on HTTPS or localhost.
+- **Deploy:** import the repo into Vercel; `vercel.json` builds `web/` and `api/`.
+- **AI coach note:** set `GEMINI_API_KEY` (and optionally `GEMINI_MODEL`) in the Vercel project's environment variables.
 
 ## Testing
 
 ```bash
-cd web
-npm test           # unit tests: analyzer, geometry, filter (synthetic poses with known answers)
-npm run e2e        # Playwright: the real app + real MediaPipe model in headless Chromium
+cd web && npm test     # 68 unit tests
+cd web && npm run e2e  # 4 Playwright tests: the real app and pose model in headless Chromium
+pytest ml              # feature extraction; with PyTorch installed, also train → ONNX round trip
 ```
 
-- **Unit tests** feed the analyzer synthetic side-view skeletons where the true answer is known:
-  - exact rep counts, shallow reps, missed lockouts and tempo;
-  - small dips that must not count;
-  - 15 FPS input;
-  - noisy landmarks with 5% of frames dropped.
-- **End-to-end tests** run the full pipeline (video → MediaPipe → analyzer → UI) on a drawn mannequin doing 3 push-ups:
-  - once as an uploaded video;
-  - once through Chromium's fake camera.
+- **Unit tests** feed the analyzer synthetic skeletons with known answers:
+  - every exercise, both camera views and each form flag;
+  - bar speed against the true hip speed, the stop cue firing exactly once, and the reps-left fit;
+  - auto-detect for every exercise, with the first rep still counted;
+  - history and 1-rep-max maths, the eval metrics, voice-command parsing;
+  - the AI coach endpoint's validation and rate limit.
+- **Browser tests** run the full pipeline on a drawn mannequin doing 3 push-ups:
+  - upload, auto-detect, highlight clip and history;
+  - the fake camera;
+  - the labelling page.
+- **CI** runs all of it, plus PyTorch training and the ONNX export check.
 
-  Both must count 3 reps. `scripts/make-mannequin-video.mjs` renders the clip.
-
-**What the mannequin does not prove:** accuracy on real people. MediaPipe tracks the drawn figure's arms well, but its elbow angles are about 20° off, and its legs in a deep squat are unreliable. Accuracy will be measured on labelled real footage (next milestone).
-
-## Status and roadmap
-
-- [x] **1. Core:** camera and video input, pose tracking, smoothing, rep counting and form checks for squats and push-ups, voice cues, set summary, PWA, unit and end-to-end tests
-- [ ] **2. Real-footage eval:** labelled side-view clips; rep-count accuracy, depth precision and recall, per-frame latency on phones
-- [ ] **3. Learned fault model:** a small temporal model (PyTorch → ONNX Runtime Web) over each rep's landmarks, kept only if it beats the rules above
-- [ ] **4. Bar tracking:** a small detector for the barbell plate, replacing the wrist-based bar path
-- [ ] **5. Set summary in words:** the per-rep numbers (never video) sent to an LLM for a short coaching note; history across sessions
+**What the mannequin doesn't prove:** accuracy on real people. That's what the labelling page and the eval are for.
 
 Spotter is a training aid, not medical advice.

@@ -7,3 +7,5 @@ web/test-results
 web/playwright-report
 web/e2e/fixtures/*.mjpeg
 docs
+eval/clips
+ml

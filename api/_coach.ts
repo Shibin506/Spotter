@@ -21,7 +21,7 @@ export interface CoachEnv {
 type Result = { status: number; body: { note?: string; error?: string } };
 
 /** Checks the payload is a plausible set summary and strips it to known fields. */
-export function validate(raw: unknown): { ok: true; data: unknown } | { ok: false; error: string } {
+export function validate(raw: unknown): { ok: boolean; data?: unknown; error?: string } {
   if (!raw || typeof raw !== 'object') return { ok: false, error: 'expected a JSON object' };
   const r = raw as Record<string, unknown>;
   if (!EXERCISES.includes(r.exercise as (typeof EXERCISES)[number])) return { ok: false, error: 'unknown exercise' };
@@ -51,7 +51,7 @@ export async function coach(bodyText: string, env: CoachEnv): Promise<Result> {
     return { status: 400, body: { error: 'invalid JSON' } };
   }
   const v = validate(parsed);
-  if (!v.ok) return { status: 400, body: { error: v.error } };
+  if (!v.ok) return { status: 400, body: { error: v.error ?? 'invalid set data' } };
 
   const res = await (env.fetch ?? fetch)(ENDPOINT, {
     method: 'POST',

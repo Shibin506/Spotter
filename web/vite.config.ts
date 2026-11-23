@@ -27,6 +27,9 @@ export default defineConfig(({ mode }) => ({
         // Cache the app shell up front; the WASM runtime and pose models are cached the first time they load.
         globPatterns: ['**/*.{js,css,html,svg,png}'],
         globIgnores: ['mediapipe/**'],
+        // Only the app itself falls back to index.html: the labelling page and the API must not
+        // (any query string, e.g. ?utm=…, would otherwise send /label.html to the app).
+        navigateFallbackDenylist: [/^\/label(\.html)?(\?|$)/, /^\/api\//],
         runtimeCaching: [
           {
             urlPattern: ({ url }) => url.pathname.startsWith('/mediapipe/') || url.pathname.startsWith('/models/'),

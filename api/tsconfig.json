@@ -1,12 +1,16 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
+    "module": "CommonJS",
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "lib": ["ES2023", "DOM"]
+    "lib": [
+      "ES2023",
+      "DOM"
+    ]
   },
-  "include": ["*.ts"]
+  "include": [
+    "*.ts"
+  ]
 }

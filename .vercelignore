@@ -1,0 +1,9 @@
+web/node_modules
+web/dist
+web/dist-embed
+web/public/mediapipe
+web/public/models
+web/test-results
+web/playwright-report
+web/e2e/fixtures/*.mjpeg
+docs
